@@ -13,7 +13,7 @@ const PLAN_3M_STARS = 150;
 const PLAN_6M_STARS = 250;
 const PLAN_12M_STARS = 350;
 
-const MONTHLY_SUBSCRIPTION_SECONDS = 2592000; // Telegram recurring subscriptions are currently 30 days only
+const MONTHLY_SUBSCRIPTION_SECONDS = 2592000;
 
 if (!BOT_TOKEN) throw new Error("Missing TELEGRAM_BOT_TOKEN");
 if (!DATABASE_URL) throw new Error("Missing DATABASE_URL");
@@ -30,6 +30,15 @@ app.get("/", (req, res) => {
 
 app.get("/telegram-webhook", (req, res) => {
   res.send("Webhook endpoint is ready. Telegram should use POST here.");
+});
+
+app.get("/health", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json({ ok: true, db: true, now: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 app.post("/telegram-webhook", async (req, res) => {
@@ -78,7 +87,7 @@ async function handleMessage(message) {
     await sendMessage(
       chatId,
       [
-        "Welcome to Gmaps->Waze.",
+        "Welcome to Google maps to waze.",
         "",
         "Send me a Google Maps link and I will convert it to a Waze link.",
         "You get 3 free trials.",
@@ -169,31 +178,57 @@ async function handleCallbackQuery(callbackQuery) {
 
   if (!chatId || !telegramId || !data) return;
 
-  if (data === "buy_1m") {
-    await send1MonthInvoice(chatId, telegramId);
-    await answerCallbackQuery(callbackQuery.id, "1 month invoice sent.");
-    return;
-  }
+  try {
+    if (data === "buy_1m") {
+      await send1MonthInvoice(chatId, telegramId);
+      await answerCallbackQuery(callbackQuery.id, "1 month invoice sent.");
+      return;
+    }
 
-  if (data === "buy_3m") {
-    await sendTimedInvoice(chatId, telegramId, "3m", "Gmaps->Waze 3 Months", "3 months access", PLAN_3M_STARS);
-    await answerCallbackQuery(callbackQuery.id, "3 months invoice sent.");
-    return;
-  }
+    if (data === "buy_3m") {
+      await sendTimedInvoice(
+        chatId,
+        telegramId,
+        "3m",
+        "Gmaps->Waze 3 Months",
+        "3 months access",
+        PLAN_3M_STARS
+      );
+      await answerCallbackQuery(callbackQuery.id, "3 months invoice sent.");
+      return;
+    }
 
-  if (data === "buy_6m") {
-    await sendTimedInvoice(chatId, telegramId, "6m", "Gmaps->Waze 6 Months", "6 months access", PLAN_6M_STARS);
-    await answerCallbackQuery(callbackQuery.id, "6 months invoice sent.");
-    return;
-  }
+    if (data === "buy_6m") {
+      await sendTimedInvoice(
+        chatId,
+        telegramId,
+        "6m",
+        "Gmaps->Waze 6 Months",
+        "6 months access",
+        PLAN_6M_STARS
+      );
+      await answerCallbackQuery(callbackQuery.id, "6 months invoice sent.");
+      return;
+    }
 
-  if (data === "buy_12m") {
-    await sendTimedInvoice(chatId, telegramId, "12m", "Gmaps->Waze 12 Months", "12 months access", PLAN_12M_STARS);
-    await answerCallbackQuery(callbackQuery.id, "12 months invoice sent.");
-    return;
-  }
+    if (data === "buy_12m") {
+      await sendTimedInvoice(
+        chatId,
+        telegramId,
+        "12m",
+        "Gmaps->Waze 12 Months",
+        "12 months access",
+        PLAN_12M_STARS
+      );
+      await answerCallbackQuery(callbackQuery.id, "12 months invoice sent.");
+      return;
+    }
 
-  await answerCallbackQuery(callbackQuery.id);
+    await answerCallbackQuery(callbackQuery.id);
+  } catch (error) {
+    console.error("Callback payment error:", error);
+    await answerCallbackQuery(callbackQuery.id, "Payment setup failed. Check bot logs.");
+  }
 }
 
 async function send1MonthInvoice(chatId, telegramId) {
@@ -202,7 +237,6 @@ async function send1MonthInvoice(chatId, telegramId) {
     title: "Gmaps->Waze 1 Month",
     description: "Monthly subscription for unlimited Google Maps -> Waze conversions",
     payload: "plan_1m",
-    provider_token: "",
     currency: "XTR",
     prices: [{ label: "1 month", amount: PLAN_1M_STARS }],
     subscription_period: MONTHLY_SUBSCRIPTION_SECONDS,
@@ -216,7 +250,6 @@ async function sendTimedInvoice(chatId, telegramId, payloadSuffix, title, descri
     title,
     description,
     payload: `plan_${payloadSuffix}`,
-    provider_token: "",
     currency: "XTR",
     prices: [{ label: title, amount }],
     start_parameter: `${payloadSuffix}_${telegramId}`
